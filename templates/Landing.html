@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0" />
+    <title>Sentiment Analysis</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet" />
+    <style>
+      body {
+        background: linear-gradient(135deg, #f8fafc 0%, #e0e7ff 100%);
+        min-height: 100vh;
+      }
+      .container {
+        max-width: 600px;
+        margin-top: 60px;
+        background: #fff;
+        border-radius: 18px;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+        padding: 2.5rem 2rem 2rem 2rem;
+      }
+      .brand {
+        font-weight: 700;
+        font-size: 2.2rem;
+        color: #6366f1;
+        letter-spacing: 1px;
+      }
+      .result-box {
+        margin-top: 1.5rem;
+        padding: 1rem;
+        border-radius: 10px;
+        background: #f1f5f9;
+        font-size: 1.1rem;
+      }
+      .btn-primary {
+        background: #6366f1;
+        border: none;
+      }
+      .btn-primary:hover {
+        background: #4f46e5;
+      }
+      .divider {
+        text-align: center;
+        margin: 2rem 0 1rem 0;
+        color: #a1a1aa;
+        font-size: 1rem;
+      }
+      .custom-file-input::-webkit-file-upload-button {
+        visibility: hidden;
+      }
+      .custom-file-input::before {
+        content: "Choose CSV file";
+        display: inline-block;
+        background: #6366f1;
+        color: white;
+        border-radius: 5px;
+        padding: 0.5rem 1rem;
+        outline: none;
+        white-space: nowrap;
+        cursor: pointer;
+        font-size: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="text-center mb-4">
+        <span class="brand">Sentiment Analysis</span>
+        <p class="text-muted mt-2">
+          Analyze the sentiment of your text or upload a CSV for bulk analysis.
+        </p>
+      </div>
+      <form id="textForm">
+        <div class="mb-3">
+          <label
+            for="textInput"
+            class="form-label"
+            >Enter a sentence</label
+          >
+          <textarea
+            class="form-control"
+            id="textInput"
+            rows="2"
+            placeholder="Type your sentence here..."
+            required></textarea>
+        </div>
+        <button
+          type="submit"
+          class="btn btn-primary w-100">
+          Analyze Sentiment
+        </button>
+      </form>
+      <div
+        id="textResult"
+        class="result-box d-none"></div>
+      <div class="divider">or</div>
+      <form
+        id="csvForm"
+        enctype="multipart/form-data">
+        <div class="mb-3">
+          <label
+            for="csvInput"
+            class="form-label"
+            >Upload CSV file</label
+          >
+          <input
+            class="form-control"
+            type="file"
+            id="csvInput"
+            accept=".csv"
+            required />
+        </div>
+        <button
+          type="submit"
+          class="btn btn-primary w-100">
+          Analyze CSV
+        </button>
+      </form>
+      <div
+        id="csvResult"
+        class="result-box d-none"></div>
+      <div
+        id="graphContainer"
+        class="text-center mt-3"></div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      // Handle single text prediction
+      document
+        .getElementById("textForm")
+        .addEventListener("submit", async function (e) {
+          e.preventDefault();
+          const text = document.getElementById("textInput").value.trim();
+          const resultBox = document.getElementById("textResult");
+          resultBox.classList.add("d-none");
+          if (!text) return;
+          try {
+            const res = await fetch("/predict", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text }),
+            });
+            const data = await res.json();
+            if (data.prediction) {
+              resultBox.textContent = `Sentiment: ${data.prediction}`;
+              resultBox.classList.remove("d-none");
+            } else if (data.error) {
+              resultBox.textContent = `Error: ${data.error}`;
+              resultBox.classList.remove("d-none");
+            }
+          } catch (err) {
+            resultBox.textContent = "An error occurred. Please try again.";
+            resultBox.classList.remove("d-none");
+          }
+        });
+
+      // Handle CSV upload prediction
+      document
+        .getElementById("csvForm")
+        .addEventListener("submit", async function (e) {
+          e.preventDefault();
+          const fileInput = document.getElementById("csvInput");
+          const resultBox = document.getElementById("csvResult");
+          const graphContainer = document.getElementById("graphContainer");
+          resultBox.classList.add("d-none");
+          graphContainer.innerHTML = "";
+          if (!fileInput.files.length) return;
+          const formData = new FormData();
+          formData.append("file", fileInput.files[0]);
+          try {
+            const res = await fetch("/predict", {
+              method: "POST",
+              body: formData,
+            });
+            if (res.headers.get("X-Graph-Exists") === "true") {
+              // Show download link
+              const blob = await res.blob();
+              const url = window.URL.createObjectURL(blob);
+              resultBox.innerHTML = `<a href="${url}" download="Predictions.csv" class="btn btn-success">Download Predictions</a>`;
+              resultBox.classList.remove("d-none");
+              // Show graph
+              const graphData = res.headers.get("X-Graph-Data");
+              if (graphData) {
+                graphContainer.innerHTML = `<img src="data:image/png;base64,${graphData}" alt="Sentiment Distribution" class="img-fluid rounded mt-2" style="max-width:300px;"/>`;
+              }
+            } else {
+              const data = await res.json();
+              if (data.error) {
+                resultBox.textContent = `Error: ${data.error}`;
+                resultBox.classList.remove("d-none");
+              }
+            }
+          } catch (err) {
+            resultBox.textContent = "An error occurred. Please try again.";
+            resultBox.classList.remove("d-none");
+          }
+        });
+    </script>
+  </body>
+</html>

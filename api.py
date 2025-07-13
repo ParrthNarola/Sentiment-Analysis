@@ -2,21 +2,32 @@ from flask import Flask, request, jsonify, send_file, render_template
 import re 
 from io import BytesIO
 import nltk
-nltk.download('stopwords')
-from nltk.corpus import stopwords
+import ssl
+import traceback
+
+# Fix SSL certificate issue for NLTK downloads
+try:
+    _create_unverified_https_context = ssl._create_unverified_context
+except AttributeError:
+    pass
+else:
+    ssl._create_default_https_context = _create_unverified_https_context
+
+# Download stopwords if not already downloaded
+try:
+    from nltk.corpus import stopwords
+    STOPWORDS = set(stopwords.words("english"))
+except LookupError:
+    nltk.download('stopwords')
+    from nltk.corpus import stopwords
+    STOPWORDS = set(stopwords.words("english"))
 from nltk.stem.porter import PorterStemmer
 import matplotlib.pyplot as plt
 import pandas as pd
 import pickle
 import base64
 
-STOPWORDS = set(stopwords.words("english"))
-# try:
-#     from nltk.corpus import stopwords
-#     STOPWORDS = set(stopwords.words("english"))
-# except LookupError:
-#     nltk.download('stopwords')
-#     STOPWORDS = set(stopwords.words("english"))
+
     
 app = Flask(__name__)
 
@@ -56,21 +67,22 @@ def predict():
             ).decode( "ascii")
             
             return response
-        elif "text" in request.json:
+        elif request.is_json and "text" in request.json:
             # Single string prediction
             text_input = request.json[ "text"]
             predicted_sentiment = single_prediction(predictor, scaler, cv, text_input)
             return jsonify({"prediction": predicted_sentiment})
     except Exception as e:
+        traceback.print_exc()
         return jsonify({"error": str(e)})
     
 def single_prediction (predictor, scaler, cv, text_input) :
     corpus = []
     stemmer = PorterStemmer()
-    review = re.sub("[^a-zA-Z]", text_input)
+    review = re.sub("[^a-zA-Z]", " ", text_input)
     review = review.lower().split()
     review = [stemmer.stem(word) for word in review if not word in STOPWORDS]
-    review = "".join(review)
+    review = " ".join(review)
     corpus.append (review)
     X_prediction = cv.transform (corpus).toarray ()
     X_prediction_scl = scaler.transform(X_prediction)
@@ -134,5 +146,5 @@ def sentiment_mapping(x):
     else:
         return "Negative"
     
-if __name__ == " __main__ ":
-    app.run(port=5000, debug=True)
+if __name__ == "__main__":
+    app.run(port=5001, debug=True)
